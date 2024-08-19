@@ -1,0 +1,400 @@
+import gymnasium as gym
+import numpy as np
+import pygame
+from stable_baselines3 import PPO
+from stable_baselines3.common.env_checker import check_env
+import math
+import logging
+import random
+# 修改日志配置为支持UTF-8
+logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.StreamHandler()])
+
+# 示例日志记录
+logging.info("finished")
+
+
+class PathPlanningEnv(gym.Env):
+    def __init__(self, map_image, agent_size):
+        super(PathPlanningEnv, self).__init__()
+        self.action_space = gym.spaces.Discrete(3)  # 0: 前进, 1: 左转, 2: 右转
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(7,), dtype=np.float32)
+
+        self.map_image = map_image
+        self.map_width, self.map_height = map_image.get_size()
+        self.agent_size = agent_size
+        self.agent_position = [250, 400]
+        self.agent_direction = np.array([0, -1])  # 初始朝上
+
+        self.screen = pygame.display.set_mode((self.map_width, self.map_height))
+        self.clock = pygame.time.Clock()
+        self.FPS = 60
+
+        # 用于记录已访问的位置
+        self.visited_positions = set()
+        self.path = []
+
+        self.offset_distance = agent_size * 1.5
+        self.global_offset = 0  # 用于探索中心区域的偏移
+        self.force_switch_direction = False
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+        self.agent_position = [300, 500]
+        self.agent_direction = np.array([0, -1])
+        self.visited_positions.clear()
+        self.path = []
+        self.global_offset = 0
+        return self.get_state(), {}
+
+    def update_visited_positions(self):
+        """ 更新已访问区域，覆盖智能体的整个尺寸而不仅仅是中心点 """
+        x, y = self.agent_position
+        half_size = self.agent_size // 2
+        for i in range(-half_size, half_size + 1):
+            for j in range(-half_size, half_size + 1):
+                self.visited_positions.add((int(x + i), int(y + j)))
+
+    def determine_turn_direction(self, radars, turn_threshold=50):
+        """
+        改进的方向选择逻辑：结合访问频率和启发式评估。
+        """
+        forward_distance = radars[2][1]
+
+        if forward_distance < turn_threshold:
+            left_space = radars[0][1] + radars[1][1]
+            right_space = radars[3][1] + radars[4][1]
+
+            # 基于空间大小判断方向
+            if abs(left_space - right_space) < 10:  # 如果左右空间接近，使用访问频率进行判断
+                left_visited = self.calculate_visited_area(-1)
+                right_visited = self.calculate_visited_area(1)
+
+                if left_visited < right_visited:
+                    return -1
+                else:
+                    return 1
+
+            # 正常情况下仍然根据空间大小判断
+            if left_space > right_space:
+                return -1 if not self.simulate_and_check_visited(-1) else 1
+            else:
+                return 1 if not self.simulate_and_check_visited(1) else -1
+
+        # 如果路径已经访问，尝试强制转向
+        if self.simulate_and_check_visited(0):
+            return -1 if not self.simulate_and_check_visited(-1) else 1
+
+        return 0
+
+    def calculate_visited_area(self, direction, steps=10):
+        """
+        计算特定方向上的已访问区域面积，作为辅助判断依据。
+        """
+        angle_step = np.radians(10) * direction
+        new_direction = self.agent_direction.copy()
+        visited_area = 0
+
+        for step in range(steps):
+            angle = angle_step * (step + 1)
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
+
+            new_direction = np.array([
+                new_direction[0] * cos_angle - new_direction[1] * sin_angle,
+                new_direction[0] * sin_angle + new_direction[1] * cos_angle
+            ])
+
+            new_position = [
+                self.agent_position[0] + new_direction[0] * self.agent_size,
+                self.agent_position[1] + new_direction[1] * self.agent_size
+            ]
+
+            if tuple(np.round(new_position).astype(int)) in self.visited_positions:
+                visited_area += 1
+
+        return visited_area
+
+    def simulate_and_check_visited(self, direction, steps=72, sample_rate=10):
+        """
+        模拟转向后的半圆形轨迹，抽样检查未来路径是否已遍历。
+
+        参数:
+        direction: 方向 -1（左转）或 1（右转）
+        steps: 转向的总步数
+        sample_rate: 抽样率，每隔多少步检查一次
+        """
+        angle_step = np.radians(180 / steps) * direction
+        new_direction = self.agent_direction.copy()
+
+        for step in range(0, steps, sample_rate):
+            angle = angle_step * (step + 1)
+            cos_angle = np.cos(angle)
+            sin_angle = np.sin(angle)
+
+            # 计算新方向向量
+            new_direction = np.array([
+                new_direction[0] * cos_angle - new_direction[1] * sin_angle,
+                new_direction[0] * sin_angle + new_direction[1] * cos_angle
+            ])
+
+            # 计算模拟的未来位置
+            new_position = [
+                self.agent_position[0] + new_direction[0] * self.agent_size,
+                self.agent_position[1] + new_direction[1] * self.agent_size
+            ]
+
+            # 检查新位置是否已遍历
+            if tuple(np.round(new_position).astype(int)) in self.visited_positions:
+                return True  # 表示未来路径中的某点已被遍历
+
+        return False  # 表示未来路径未被遍历
+
+    def calculate_reward(self, collision):
+        """
+        调整奖励机制：增加对新路径的奖励，减少重复路径的惩罚。
+        """
+        if collision:
+            return -100  # 碰撞惩罚
+
+        grid_position = tuple(np.round(self.agent_position).astype(int))
+
+        if grid_position in self.visited_positions:
+            return -30  # 减少重复路径的惩罚
+        else:
+            self.visited_positions.add(grid_position)
+            return 30  # 增加探索新区域的奖励
+
+    # 其他函数保持不变...
+
+    def get_state(self):
+        normalized_position = (np.array(self.agent_position) / np.array([self.map_width, self.map_height])) * 255.0
+        radars = self.radar_scan()
+        radar_distances = np.array([dist for _, dist in radars], dtype=np.float32)
+        state = np.concatenate((normalized_position.astype(np.float32), radar_distances))
+        return state
+
+    def radar_scan(self, max_distance=254):
+        radars = []
+        angles = [-90, -45, 0, 45, 90]
+        for angle in angles:
+            rad = np.radians(angle)
+            dir_x = self.agent_direction[0] * np.cos(rad) - self.agent_direction[1] * np.sin(rad)
+            dir_y = self.agent_direction[0] * np.sin(rad) + self.agent_direction[1] * np.cos(rad)
+            detected = False
+            for dist in range(0, max_distance + 1, 5):
+                scan_position = (int(self.agent_position[0] + dir_x * dist), int(self.agent_position[1] + dir_y * dist))
+                if self.check_collision(scan_position):
+                    radars.append((angle, dist))
+                    detected = True
+                    break
+            if not detected:
+                radars.append((angle, max_distance))
+        return radars
+
+    def move_agent(self, speed=5):
+        new_position = [self.agent_position[0] + self.agent_direction[0] * speed,
+                        self.agent_position[1] + self.agent_direction[1] * speed]
+        if not self.check_collision(new_position):
+            self.agent_position = new_position
+            self.update_visited_positions()  # 记录整个智能体经过的区域
+            self.path.append(tuple(self.agent_position))
+
+    def rotate_and_move(self, direction, steps=72):
+        """
+        执行更平缓的U型转弯，通过增加步数和减少每步的移动距离实现。
+        """
+        radius = self.agent_size * 2  # 增加半径
+
+        # 减速以实现平滑转弯
+        for step in range(steps):
+            angle = np.radians(180 / steps) * direction
+            new_direction_x = self.agent_direction[0] * np.cos(angle) - self.agent_direction[1] * np.sin(angle)
+            new_direction_y = self.agent_direction[0] * np.sin(angle) + self.agent_direction[1] * np.cos(angle)
+            self.agent_direction = np.array([new_direction_x, new_direction_y])
+
+            # 减少每步移动的速度
+            step_speed = radius / (steps * 2)  # 根据半径和步数计算移动速度
+            self.move_agent(speed=step_speed)
+
+            # 确保方向向量规范化
+            norm_before = np.linalg.norm(self.agent_direction)
+            self.agent_direction /= norm_before
+
+        # 恢复正常速度
+        self.move_agent(speed=5)
+
+    def align_direction(self):
+        """
+        精确对齐方向向量，确保方向向量与最近的水平或垂直轴对齐。
+        """
+        x, y = self.agent_direction
+        if abs(x) > abs(y):
+            self.agent_direction = np.array([np.sign(x), 0])
+        else:
+            self.agent_direction = np.array([0, np.sign(y)])
+
+    def correct_position(self):
+        """
+        校正当前位置，使其与方向对齐，避免小角度误差。
+        """
+        x, y = self.agent_position
+        aligned_x = round(x / self.agent_size) * self.agent_size
+        aligned_y = round(y / self.agent_size) * self.agent_size
+        self.agent_position = [aligned_x, aligned_y]
+
+    def determine_turn_direction(self, radars, turn_threshold=50):
+        forward_distance = radars[2][1]
+        if forward_distance < turn_threshold:
+            left_space = radars[0][1] + radars[1][1]
+            right_space = radars[3][1] + radars[4][1]
+
+            # 如果左右空间差不多，使用强制切换方向避免长时间原地打转
+            if abs(left_space - right_space) < 10:
+                self.force_switch_direction = not self.force_switch_direction
+                return -1 if self.force_switch_direction else 1
+
+            # 优先选择未探索区域
+            if left_space > right_space:
+                return -1 if not self.simulate_and_check_visited(-1) else 1
+            else:
+                return 1 if not self.simulate_and_check_visited(1) else -1
+
+        return 0
+
+    def update_visited_positions(self):
+        """ 更新已访问区域，覆盖智能体的整个尺寸而不仅仅是中心点 """
+        x, y = self.agent_position
+        half_size = self.agent_size // 2
+        for i in range(-half_size, half_size + 1):
+            for j in range(-half_size, half_size + 1):
+                self.visited_positions.add((int(x + i), int(y + j)))
+
+    def simulate_and_check_visited(self, direction):
+        """模拟转向后的新位置并检查是否已访问过。"""
+        angle = np.radians(10) * direction
+        new_direction = np.array([
+            self.agent_direction[0] * np.cos(angle) - self.agent_direction[1] * np.sin(angle),
+            self.agent_direction[0] * np.sin(angle) + self.agent_direction[1] * np.cos(angle)
+        ])
+        new_position = [
+            self.agent_position[0] + new_direction[0] * self.agent_size,
+            self.agent_position[1] + new_direction[1] * self.agent_size
+        ]
+        return tuple(np.round(new_position).astype(int)) in self.visited_positions
+
+    def step(self, action):
+        if action == 0:
+            # 普通移动，不转弯
+            self.move_agent()
+        else:
+            # 检查是否即将转弯，提前减速
+            radar_data = self.radar_scan()
+            forward_distance = radar_data[2][1]
+            if forward_distance < self.agent_size * 3:  # 根据前方距离决定减速
+                self.move_agent(speed=3)  # 减速
+            else:
+                self.move_agent(speed=5)  # 正常速度
+
+            # 根据需要执行转弯
+            rotation_direction = self.determine_turn_direction(radar_data)
+            if rotation_direction != 0:
+                self.rotate_and_move(rotation_direction)
+
+        # 计算状态、奖励和终止条件
+        state = self.get_state()
+        reward = self.calculate_reward(self.check_collision(self.agent_position))
+        terminated = self.check_collision(self.agent_position)
+
+        return state, reward, terminated, False, {}
+
+    def calculate_reward(self, collision):
+        if collision:
+            return -100  # 碰撞惩罚
+        if tuple(self.agent_position) in self.visited_positions:
+            return -70  # 更高的重复路径惩罚
+        else:
+            self.visited_positions.add(tuple(self.agent_position))
+            return 10  # 探索奖励
+
+    def check_collision(self, position):
+        x, y = int(position[0]), int(position[1])
+        if x < 0 or x >= self.map_width or y < 0 or y >= self.map_height:
+            return True
+        color = self.map_image.get_at((x, y))
+        return color != (105, 105, 105, 255)  # 非可行区域返回True
+
+
+    def render(self, mode='human'):
+        pygame.event.pump()
+        self.screen.blit(self.map_image, (0, 0))
+
+        if len(self.path) > 1:
+            for i in range(1, len(self.path)):
+                pygame.draw.line(self.screen, (255, 0, 0), self.path[i - 1], self.path[i], 2)
+
+        self.draw_agent(self.screen)
+        self.draw_radar(self.screen)
+
+        pygame.display.flip()
+        self.clock.tick(self.FPS)
+
+    def draw_agent(self, screen):
+        half_size = self.agent_size // 2
+        corners = [
+            (-half_size, -half_size),
+            (half_size, -half_size),
+            (half_size, half_size),
+            (-half_size, half_size)
+        ]
+        angle_rad = np.arctan2(self.agent_direction[1], self.agent_direction[0])
+        rotated_corners = []
+        for corner in corners:
+            rotated_x = corner[0] * np.cos(angle_rad) - corner[1] * np.sin(angle_rad)
+            rotated_y = corner[0] * np.sin(angle_rad) + corner[1] * np.cos(angle_rad)
+            rotated_corners.append((self.agent_position[0] + rotated_x, self.agent_position[1] + rotated_y))
+        pygame.draw.polygon(screen, (0, 255, 0), rotated_corners)
+
+    def draw_radar(self, screen):
+        radars = self.radar_scan()
+        for angle, dist in radars:
+            rad = np.radians(angle)
+            end_x = int(self.agent_position[0] + (
+                    self.agent_direction[0] * np.cos(rad) - self.agent_direction[1] * np.sin(rad)) * dist)
+            end_y = int(self.agent_position[1] + (
+                    self.agent_direction[0] * np.sin(rad) + self.agent_direction[1] * np.cos(rad)) * dist)
+            pygame.draw.line(screen, (0, 255, 0), self.agent_position, (end_x, end_y), 2)
+            pygame.draw.circle(screen, (0, 255, 0), (end_x, end_y), 5)
+
+# 初始化环境
+map_image = pygame.image.load('round_obstacle.png')  # 使用你的地图图像
+agent_size = 20
+env = PathPlanningEnv(map_image, agent_size)
+
+# 检查环境
+check_env(env)
+
+# 使用PPO算法
+model = PPO("MlpPolicy", env, verbose=1)
+model.learn(total_timesteps=10000)  # 学习过程
+
+# 保存模型
+model.save("ppo_path_planning")
+
+# 测试模型并可视化
+obs, _ = env.reset()
+
+render_every_n_steps = 10
+
+for step in range(4000):
+    action, _states = model.predict(obs)
+    obs, rewards, terminated, truncated, info = env.step(action)
+    done = terminated or truncated  # 结合两个条件
+
+    # 每隔n步渲染一次
+    if step % render_every_n_steps == 0:
+        env.render()
+
+    pygame.time.wait(10)  # 可适当减少等待时间
+
+    if done:
+        obs, _ = env.reset()
