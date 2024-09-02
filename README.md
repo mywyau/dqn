@@ -104,3 +104,16 @@ Exploration Challenges:
 Overestimation Bias:
 
 - DQN can suffer from overestimation bias, where it consistently overestimates Q-values. While techniques like Double DQN (DDQN) mitigate this, it is an issue that requires additional modifications to the basic DQN algorithm.
+
+## Training images 
+
+- The red squares are obstacles and the green represents the car/model.
+- We reward the RL network when it tries to find new space and not colliding with obstacles
+- When the car crashes it resets and starts a new episode/training cycle and it's reward score is updated.
+- Epsilon keeps track of it's likelihood to explore or exploit. A high score out of 100%/1.00
+- If epsilon gets lower the chance it tries to explore will decrease.
+- The car can also be adjusted for speed, acceleration and other parameters.
+
+
+![dqn_training.png](images/dqn_training.png)
+

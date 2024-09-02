@@ -78,4 +78,4 @@ def train_dqn(episodes, visualize=False):
         pygame.quit()
 
 if __name__ == "__main__":
-    train_dqn(20, visualize=True)  # Train for 20 episodes with visualization enabled
+    train_dqn(1000, visualize=True)  # Train for 1000 episodes with visualization enabled
