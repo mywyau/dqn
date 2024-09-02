@@ -1,5 +1,9 @@
 import math
+
 import pygame
+
+from colours import GREEN
+
 
 class Car:
     def __init__(self, x, y, environment):
@@ -17,7 +21,7 @@ class Car:
         self.height = 15
 
         # Color and Rect for the car (a simple green rectangle for now)
-        self.color = (0, 255, 0)
+        self.color = GREEN
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
     def draw(self, screen):

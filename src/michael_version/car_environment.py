@@ -1,5 +1,8 @@
 import pygame
 
+from colours import WHITE
+
+
 class CarEnvironment:
     def __init__(self, car, environment):
         self.car = car
@@ -33,7 +36,7 @@ class CarEnvironment:
 
     def render(self):
         """Render the environment."""
-        self.screen.fill((255, 255, 255))  # Clear the screen with white
+        self.screen.fill(WHITE)  # Clear the screen with white
         self.environment.draw(self.screen)  # Draw the obstacles
         self.car.draw(self.screen)  # Draw the car
         pygame.display.flip()  # Update the display
