@@ -24,12 +24,14 @@ Or just run the convenience scripts since you need to set the PYTHONPATH etc.
 ./run_tests.sh
 ```
 
-### Run app
+### To train the model
 
 ```
-./run_app.sh
+./run_train_model.sh
 ```
 
+### After training once model has been created, test in a pygame simulation
+
 ```
-./run_app_2.sh
+./run_test_model.sh
 ```
