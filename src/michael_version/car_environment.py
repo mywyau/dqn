@@ -1,6 +1,6 @@
 import pygame
 
-from colours import WHITE
+from colours import WHITE, BLUE
 
 
 class CarEnvironment:
@@ -36,7 +36,17 @@ class CarEnvironment:
 
     def render(self):
         """Render the environment."""
-        self.screen.fill(WHITE)  # Clear the screen with white
-        self.environment.draw(self.screen)  # Draw the obstacles
-        self.car.draw(self.screen)  # Draw the car
+        self.screen.fill(WHITE)  # Clear the screen with black
+
+        # Draw the trail of the car
+        trail_color = BLUE  # blue for the trail
+        for pos in self.car.visited_positions:
+            pygame.draw.circle(self.screen, trail_color, (int(pos[0]), int(pos[1])), 2)
+
+        # Draw the environment obstacles
+        self.environment.draw(self.screen)
+
+        # Draw the car on top of the trail
+        self.car.draw(self.screen)
+
         pygame.display.flip()  # Update the display
