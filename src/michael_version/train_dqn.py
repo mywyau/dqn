@@ -1,23 +1,33 @@
-# train_dqn.py
 import logging
-import torch
+import sys
+
 import pygame
+import torch
+
 from car import Car
 from car_environment import CarEnvironment
 from dqn_agent import DQNAgent
 from environment import Environment  # Assuming Environment is defined in a separate file
+from maze_environment import MazeEnvironment  # Import the MazeEnvironment class
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def train_dqn(episodes, visualize=False):
+
+def train_dqn(episodes, environment_type='default', visualize=False):
     # Initialize Pygame if visualizing
     if visualize:
         pygame.init()
 
-    # Initialize environment and car
-    environment = Environment(1200, 800, obstacle_count=10)
-    car = Car(100, 100, environment)
+    # Initialize environment and car based on the selected environment type
+    if environment_type == 'default':
+        environment = Environment(1200, 800, obstacle_count=10)
+    elif environment_type == 'maze':
+        environment = maze_env = MazeEnvironment(1200, 800, cell_size=120, )
+    else:
+        raise ValueError(f"Unknown environment type: {environment_type}")
+
+    car = Car(environment.start_x, environment.start_y, environment)
     env = CarEnvironment(car, environment)
 
     state_size = len(env.get_state())
@@ -25,7 +35,7 @@ def train_dqn(episodes, visualize=False):
     action_size = 7
     agent = DQNAgent(state_size, action_size)
 
-    logging.info("Starting DQN training")
+    logging.info(f"Starting DQN training in {environment_type} environment")
 
     for e in range(episodes):
         state = env.reset()
@@ -54,7 +64,8 @@ def train_dqn(episodes, visualize=False):
 
             if done:
                 agent.update_target_model()
-                logging.info(f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
+                logging.info(
+                    f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
                 break
 
             agent.replay()
@@ -68,7 +79,7 @@ def train_dqn(episodes, visualize=False):
                 pygame.time.wait(10)  # Adjust the delay to control the visualization speed
 
         if e % 10 == 0 or e == episodes - 1:
-            torch.save(agent.model.state_dict(), "generated_models/dqn_model.pth")
+            torch.save(agent.model.state_dict(), f"generated_models/dqn_model_{environment_type}_ep{e + 1}.pth")
             logging.info(f"Model saved after episode {e + 1}")
 
     logging.info("DQN training completed")
@@ -77,5 +88,12 @@ def train_dqn(episodes, visualize=False):
     if visualize:
         pygame.quit()
 
+
 if __name__ == "__main__":
-    train_dqn(1000, visualize=True)  # Train for 1000 episodes with visualization enabled
+    if len(sys.argv) > 1:
+        environment_type = sys.argv[1]
+    else:
+        environment_type = 'default'
+
+    train_dqn(1000, environment_type=environment_type,
+              visualize=True)  # Train for 1000 episodes with visualization enabled

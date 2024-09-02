@@ -27,7 +27,7 @@ class DQNAgent:
         self.gamma = 0.95    # discount rate
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.001
-        self.epsilon_decay = 0.999995
+        self.epsilon_decay = 0.9995  # the exploration rate is multiplied each episode by this, so closer to 1 is better for exploration
         self.learning_rate = 0.001
         self.batch_size = 32
         self.train_start = 1000
