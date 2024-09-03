@@ -14,7 +14,7 @@ os.makedirs("generated_models", exist_ok=True)
 os.makedirs("generated_maps", exist_ok=True)
 
 # Set up logging to ensure INFO messages are shown
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
 def train_dqn(episodes, environment_type='default', visualize=False):
     # Initialize Pygame if visualizing
@@ -41,6 +41,8 @@ def train_dqn(episodes, environment_type='default', visualize=False):
     agent = DQNAgent(state_size, action_size)
 
     logging.info(f"Starting DQN training in {environment_type} environment")
+
+    best_reward = -float('inf')  # Initialize best reward to a very low value
 
     for e in range(episodes):
         state = env.reset()
@@ -83,17 +85,28 @@ def train_dqn(episodes, environment_type='default', visualize=False):
                 env.render()
                 pygame.time.wait(10)  # Adjust the delay to control the visualization speed
 
-        # Optionally save the model periodically
-        if e % 100 == 0 or e == episodes - 1:
+        # Check if this episode produced the best reward
+        if total_reward > best_reward:
+            best_reward = total_reward
+            torch.save(agent.model.state_dict(), f"generated_models/dqn_model_best_{environment_type}.pth")
+            logging.info(f"New best model saved with reward: {total_reward}")
+
+            with open(f"generated_maps/best_map_ep{e + 1}.txt", "w") as map_file:
+                map_output = car.visualize_map_to_string()
+                map_file.write(map_output)
+                logging.info(f"Best map saved after episode {e + 1}")
+
+        # Save the model and map every 200 episodes, regardless of performance
+        if e % 200 == 0 or e == episodes - 1:
             torch.save(agent.model.state_dict(), f"generated_models/dqn_model_{environment_type}_ep{e + 1}.pth")
             logging.info(f"Model saved after episode {e + 1}")
 
-    logging.info("DQN training completed")
+            with open(f"generated_maps/map_ep{e + 1}.txt", "w") as map_file:
+                map_output = car.visualize_map_to_string()
+                map_file.write(map_output)
+                logging.info(f"Map saved after episode {e + 1}")
 
-    # Optionally save the map to a file when training finishes
-    with open(f"generated_maps/map_ep{e + 1}.txt", "w") as map_file:
-        map_output = car.visualize_map_to_string()
-        map_file.write(map_output)
+    logging.info("DQN training completed")
 
     # Quit Pygame if visualizing
     if visualize:
@@ -105,4 +118,4 @@ if __name__ == "__main__":
     else:
         environment_type = 'default'
 
-    train_dqn(10000, environment_type=environment_type, visualize=True)
+    train_dqn(2000, environment_type=environment_type, visualize=True)

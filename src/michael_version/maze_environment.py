@@ -23,13 +23,16 @@ class MazeEnvironment:
         self.start_x, self.start_y = self.find_open_start()
 
     def generate_maze(self):
-        # Initialize starting point
-        current_cell = (0, 0)
-        self.visited.append(current_cell)
-        self.stack.append(current_cell)
-        self.grid[current_cell[1]][current_cell[0]] = 0  # Mark the start as an open path
+        # Initialize the maze grid with walls (1)
+        self.grid = [[1 for _ in range(self.columns)] for _ in range(self.rows)]
 
-        while len(self.stack) > 0:
+        # Start the maze generation from the top-left corner
+        current_cell = (0, 0)
+        self.visited = [current_cell]
+        self.stack = [current_cell]
+        self.grid[0][0] = 0  # Mark the start as an open path
+
+        while self.stack:
             current_cell = self.stack[-1]
             neighbors = self.get_neighbors(current_cell)
 
@@ -46,7 +49,7 @@ class MazeEnvironment:
     def get_neighbors(self, cell):
         neighbors = []
         x, y = cell
-        if x > 1 and (x - 2, y) not in self.visited:  # Left (skipping 1 cell to ensure proper wall between cells)
+        if x > 1 and (x - 2, y) not in self.visited:  # Left (skip 1 cell for wall)
             neighbors.append((x - 2, y))
         if x < self.columns - 2 and (x + 2, y) not in self.visited:  # Right
             neighbors.append((x + 2, y))
@@ -62,19 +65,25 @@ class MazeEnvironment:
 
         self.grid[y2][x2] = 0  # Mark next cell as a path
 
-        # Remove the wall between cells (modify the cell in between to be part of the path)
+        # Remove the wall between the current cell and the next cell
         if x1 == x2:  # Moving vertically
             self.grid[min(y1, y2) + 1][x1] = 0
         elif y1 == y2:  # Moving horizontally
             self.grid[y1][min(x1, x2) + 1] = 0
 
+    def reset(self):
+        # Regenerate the maze each time the environment is reset
+        self.generate_maze()
+        self.start_x, self.start_y = self.find_open_start()  # Update start position
+        return self.grid
+
     def draw(self, screen):
+        # Draw the maze on the screen
         screen.fill(WHITE)
         for y in range(self.rows):
             for x in range(self.columns):
-                if self.grid[y][x] == 1:  # 1 means wall
-                    pygame.draw.rect(screen, BLACK,
-                                     (x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size))
+                if self.grid[y][x] == 1:  # Wall
+                    pygame.draw.rect(screen, BLACK, pygame.Rect(x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size))
 
     def is_position_obstacle(self, x, y):
         """Check if the given (x, y) position is occupied by a maze wall."""
@@ -90,4 +99,4 @@ class MazeEnvironment:
             for x in range(1, self.columns - 1):
                 if self.grid[y][x] == 0 and self.grid[y - 1][x] == 0 and self.grid[y + 1][x] == 0 and self.grid[y][x - 1] == 0 and self.grid[y][x + 1] == 0:
                     return x * self.cell_size + self.cell_size // 2, y * self.cell_size + self.cell_size // 2
-        return 50, 50  # Default to (10, 10) if no open path is found
+        return 50, 50  # Default to (50, 50) if no open path is found
