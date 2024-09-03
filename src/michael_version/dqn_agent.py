@@ -1,34 +1,39 @@
+import random
+from collections import deque
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import random
-import numpy as np
-from collections import deque
+from noisy_linear import NoisyLinear  # Ensure this is your custom NoisyLinear class
 
 class DQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_size, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, action_size)
+        self.fc1 = NoisyLinear(state_size, 64)
+        self.fc2 = NoisyLinear(64, 64)
+        self.fc3 = NoisyLinear(64, action_size)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)
 
+    def reset_noise(self):
+        self.fc1.reset_noise()
+        self.fc2.reset_noise()
+        self.fc3.reset_noise()
+
 class DQNAgent:
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.9995):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.99
-        self.epsilon = 1.0
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.9998
+        self.gamma = 0.95  # discount rate
         self.learning_rate = 0.001
-        self.batch_size = 64
+        self.batch_size = 32
         self.train_start = 1000
+        self.epsilon = epsilon  # Initial epsilon value for epsilon-greedy
+        self.epsilon_min = epsilon_min  # Minimum epsilon value
+        self.epsilon_decay = epsilon_decay  # Decay rate for epsilon
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -37,7 +42,7 @@ class DQNAgent:
         self.update_target_model()
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.criterion = nn.SmoothL1Loss()  # Huber Loss
+        self.criterion = nn.MSELoss()
 
     def update_target_model(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -46,11 +51,14 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state):
-        if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        act_values = self.model(state)
-        return torch.argmax(act_values[0]).item()
+        if random.random() <= self.epsilon:  # Epsilon-greedy decision
+            return random.randrange(self.action_size)  # Random action
+        else:
+            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            self.model.reset_noise()  # Reset noise before choosing an action
+            with torch.no_grad():  # Disable gradient calculation
+                act_values = self.model(state)
+            return torch.argmax(act_values[0]).item()
 
     def replay(self):
         if len(self.memory) < self.train_start:
@@ -66,10 +74,8 @@ class DQNAgent:
             if done:
                 target[0][action] = reward
             else:
-                # Double DQN: Select action using the main network, then evaluate with target network
-                next_action = torch.argmax(self.model(next_state)[0]).item()  # Action selection with the main network
                 t = self.target_model(next_state).detach()
-                target[0][action] = reward + self.gamma * t[0][next_action]  # Use target network for evaluation
+                target[0][action] = reward + self.gamma * torch.max(t[0])
 
             output = self.model(state)
             loss = self.criterion(output, target)
@@ -77,6 +83,9 @@ class DQNAgent:
             loss.backward()
             self.optimizer.step()
 
+        self.model.reset_noise()  # Reset noise after each training step
+
+        # Decay epsilon to reduce the probability of random actions over time
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
