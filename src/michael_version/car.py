@@ -1,9 +1,6 @@
 import math
-
 import pygame
-
 from colours import BLACK, GREEN
-
 
 class Car:
     def __init__(self, x, y, environment, visualize=False):
@@ -53,8 +50,8 @@ class Car:
         # Clear radar data
         self.radars.clear()
 
-        # Check radar distances at various angles (360 degrees)
-        for d in range(0, 360, 15):  # Increased resolution of radar beams
+        # Check radar distances at various angles (front and sides only)
+        for d in range(-90, 91, 15):  # Angles from -90 to 90 degrees (front and sides)
             self.check_radar(d, environment)
 
         # Mark obstacles on the map
@@ -136,13 +133,13 @@ class Car:
         self.rect.topleft = (self.x, self.y)
 
         # Initialize radars to some default values (e.g., max distance)
-        for d in range(0, 360, 30):
+        for d in range(-90, 91, 30):  # Adjusted radar angles to match the front and sides
             self.radars.append([(self.x, self.y), 100])
 
     def get_state(self):
         state = [self.speed, self.angle]
 
-        fixed_radar_count = 24  # Increased radar count for better sensing
+        fixed_radar_count = 12  # Adjusted radar count to match the reduced number of beams
 
         while len(self.radars) < fixed_radar_count:
             self.radars.append([(self.x, self.y), 100])
@@ -150,7 +147,7 @@ class Car:
         for radar in self.radars:
             state.append(radar[1])
 
-        fixed_state_size = 26  # Speed + Angle + 24 radar distances
+        fixed_state_size = 15  # Speed + Angle + 12 radar distances
         while len(state) < fixed_state_size:
             state.append(0)
 

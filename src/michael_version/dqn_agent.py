@@ -23,7 +23,7 @@ class DQN(nn.Module):
         self.fc3.reset_noise()
 
 class DQNAgent:
-    def __init__(self, state_size, action_size, epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.9995):
+    def __init__(self, state_size, action_size, epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.999995):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)

@@ -28,7 +28,7 @@ def test_dqn():
     total_reward = 0
 
     # Run the game loop for testing
-    for time in range(10000):
+    for time in range(10000000):
         # Handle events (including quitting)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
