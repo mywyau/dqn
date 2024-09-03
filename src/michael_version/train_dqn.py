@@ -105,4 +105,4 @@ if __name__ == "__main__":
     else:
         environment_type = 'default'
 
-    train_dqn(10000, environment_type=environment_type, visualize=False)
+    train_dqn(10000, environment_type=environment_type, visualize=True)

@@ -175,13 +175,13 @@ class Car:
         if self.speed > 0:
             reward += 0.1
 
-        # Extra reward for exploring new areas
+        # Heavily reward exploring new areas
         current_position = (int(self.rect.centerx), int(self.rect.centery))
         if current_position not in self.visited_positions:
-            reward += 10  # Reward for exploring a new area
+            reward += 50  # Heavily reward for exploring a new area
             self.visited_positions.add(current_position)
         else:
-            reward -= 1  # Small penalty for revisiting an area
+            reward -= 0.1  # Small penalty for revisiting an area
 
         # Reward for maintaining a safe distance from obstacles
         if min_distance_to_obstacle > 50:
