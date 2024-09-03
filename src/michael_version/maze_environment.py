@@ -5,7 +5,6 @@ import pygame
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 
-
 class MazeEnvironment:
     def __init__(self, screen_width, screen_height, cell_size=80):
         self.screen_width = screen_width
@@ -91,4 +90,4 @@ class MazeEnvironment:
             for x in range(1, self.columns - 1):
                 if self.grid[y][x] == 0 and self.grid[y - 1][x] == 0 and self.grid[y + 1][x] == 0 and self.grid[y][x - 1] == 0 and self.grid[y][x + 1] == 0:
                     return x * self.cell_size + self.cell_size // 2, y * self.cell_size + self.cell_size // 2
-        return 30, 30  # Default to (30, 30) if no open path is found
+        return 10, 10  # Default to (10, 10) if no open path is found

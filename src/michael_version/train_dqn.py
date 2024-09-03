@@ -30,6 +30,9 @@ def train_dqn(episodes, environment_type='default', visualize=False):
     car = Car(environment.start_x, environment.start_y, environment)
     env = CarEnvironment(car, environment)
 
+    state = env.get_state()
+    print(f"State: {state}, Shape: {len(state)}")
+
     state_size = len(env.get_state())
     print(f"State size: {state_size}")  # This should match the input size of the first layer in DQN
     action_size = 7
