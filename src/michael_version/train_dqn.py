@@ -16,37 +16,30 @@ os.makedirs("generated_maps", exist_ok=True)
 # Set up logging to ensure INFO messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def train_dqn(episodes, environment_type='default', visualize=False):
+def train_dqn(episodes, environment_type='maze', visualize=False):
     # Initialize Pygame if visualizing
     if visualize:
         pygame.init()
 
     # Initialize environment and car based on the selected environment type
-    if environment_type == 'default':
-        environment = Environment(1200, 800, obstacle_count=10)
-    elif environment_type == 'maze':
+    if environment_type == 'maze':
         environment = MazeEnvironment(1200, 800, cell_size=120)
     else:
         raise ValueError(f"Unknown environment type: {environment_type}")
 
-    car = Car(environment.start_x, environment.start_y, environment, visualize)
-    env = CarEnvironment(car, environment, visualize)
-
-    state = env.get_state()
-    logging.info(f"State: {state}, Shape: {len(state)}")
-
-    state_size = len(env.get_state())
-    logging.info(f"State size: {state_size}")  # This should match the input size of the first layer in DQN
+    state_size = len(environment.reset())  # Reset maze to get the initial state size
     action_size = 7
     agent = DQNAgent(state_size, action_size)
 
     logging.info(f"Starting DQN training in {environment_type} environment")
 
     for e in range(episodes):
-        state = env.reset()
-        car.reset()  # Reset the car, which includes clearing the map
-        logging.info(f"Episode {e + 1}/{episodes} started with initial state of size: {len(state)}")
+        # Reset the environment to regenerate the maze
+        environment.reset()
+        car = Car(environment.start_x, environment.start_y, environment, visualize=visualize)
+        env = CarEnvironment(car, environment)
 
+        state = env.reset()
         total_reward = 0
 
         for time in range(2000):
@@ -60,9 +53,6 @@ def train_dqn(episodes, environment_type='default', visualize=False):
             action = agent.act(state)
             next_state, reward, done = env.step(action)
 
-            if time % 100 == 0:
-                logging.info(f"Timestep {time}: State size: {len(state)}, Next state size: {len(next_state)}")
-
             agent.remember(state, action, reward, next_state, done)
             state = next_state
 
@@ -70,34 +60,25 @@ def train_dqn(episodes, environment_type='default', visualize=False):
 
             if done:
                 agent.update_target_model()
-                logging.info(f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
                 break
 
             agent.replay()
 
-            if time % 100 == 0:
-                logging.info(f"Episode {e + 1}/{episodes} at timestep {time} - Current Epsilon: {agent.epsilon:.2f}")
-
-            # Render the environment if visualizing
             if visualize:
                 env.render()
-                pygame.time.wait(10)  # Adjust the delay to control the visualization speed
+                pygame.time.wait(10)
 
-        # Optionally save the model periodically
-        if e % 100 == 0 or e == episodes - 1:
+        logging.info(f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
+
+        if e % 10 == 0 or e == episodes - 1:
             torch.save(agent.model.state_dict(), f"generated_models/dqn_model_{environment_type}_ep{e + 1}.pth")
             logging.info(f"Model saved after episode {e + 1}")
 
     logging.info("DQN training completed")
 
-    # Optionally save the map to a file when training finishes
-    with open(f"generated_maps/map_ep{e + 1}.txt", "w") as map_file:
-        map_output = car.visualize_map_to_string()
-        map_file.write(map_output)
-
-    # Quit Pygame if visualizing
     if visualize:
         pygame.quit()
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
