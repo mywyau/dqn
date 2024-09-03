@@ -173,25 +173,25 @@ class Car:
         current_position = (int(self.rect.centerx), int(self.rect.centery))
         radar_range = max(radar[1] for radar in self.radars)  # Use the radar range as the size of the visited area
         if not self.is_position_visited(current_position, radar_range):
-            reward += 50
+            reward += 100
             self.mark_area_as_visited(current_position, radar_range)  # Mark the area within radar range as visited
         else:
             reward -= 0.5  # Increase the penalty for revisiting an area
 
         # Incremental penalty for staying in the same area
-        if len(self.path) > 10:  # After 10 steps, check for stagnation
-            recent_positions = self.path[-10:]
+        if len(self.path) > 20:  # After 10 steps, check for stagnation
+            recent_positions = self.path[-20:]
             mean_x = sum(p[0] for p in recent_positions) / 10
             mean_y = sum(p[1] for p in recent_positions) / 10
             variance = sum((math.hypot(p[0] - mean_x, p[1] - mean_y)) for p in recent_positions)
             if variance < 10:  # Adjust this threshold as needed
                 reward -= 2  # Increase the penalty for lack of movement
 
-        # Penalize large angle changes to encourage smooth turning
-        if hasattr(self, 'prev_angle'):
-            angle_change_penalty = abs(self.angle - self.prev_angle) * 0.2  # Reduce the penalty factor
-            reward -= angle_change_penalty
-        self.prev_angle = self.angle
+        # # Penalize large angle changes to encourage smooth turning
+        # if hasattr(self, 'prev_angle'):
+        #     angle_change_penalty = abs(self.angle - self.prev_angle) * 0.2  # Reduce the penalty factor
+        #     reward -= angle_change_penalty
+        # self.prev_angle = self.angle
 
         # Penalty for high speed in sharp corners, scaled to speed
         if self.is_approaching_corner():
@@ -234,7 +234,7 @@ class Car:
         x, y = position
         for dx in range(-radius, radius + 1):
             for dy in range(-radius, radius + 1):
-                if dx ** 2 + dy ** 2 <= radius ** 2:  # Check if within the radar range
+                if dx ** 2 + dy ** 2 <= radius:  # Check if within the radar range
                     self.visited_positions.add((x + dx, y + dy))
 
     def is_approaching_corner(self):

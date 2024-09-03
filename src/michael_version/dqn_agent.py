@@ -10,20 +10,23 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         self.fc1 = NoisyLinear(state_size, 64)
         self.fc2 = NoisyLinear(64, 64)
-        self.fc3 = NoisyLinear(64, action_size)
+        self.fc3 = NoisyLinear(64, 64)
+        self.fc4 = NoisyLinear(64, action_size)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        return self.fc3(x)
+        x = torch.relu(self.fc3(x))
+        return self.fc4(x)
 
     def reset_noise(self):
         self.fc1.reset_noise()
         self.fc2.reset_noise()
         self.fc3.reset_noise()
+        self.fc4.reset_noise()
 
 class DQNAgent:
-    def __init__(self, state_size, action_size, epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.999995):
+    def __init__(self, state_size, action_size, epsilon=1.0, epsilon_min=0.05, epsilon_decay=0.9995):
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
