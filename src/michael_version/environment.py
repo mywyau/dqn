@@ -1,5 +1,4 @@
 import random
-
 import pygame
 
 from colours import RED
@@ -14,6 +13,25 @@ class Environment:
 
         # Generate random obstacles
         self.generate_obstacles()
+
+        # Set an open starting position for the car
+        self.start_x, self.start_y = self.find_open_start()
+
+    def find_open_start(self):
+        """Find an open position in the environment to start."""
+        attempt_limit = 1000  # Limit the number of attempts to find an open position
+        car_width, car_height = 30, 15  # Assuming these are the dimensions of the car
+
+        for _ in range(attempt_limit):
+            # Generate a random position
+            x = random.randint(0, self.screen_width - car_width)
+            y = random.randint(0, self.screen_height - car_height)
+            if self.is_position_free((x, y), (car_width, car_height)):
+                return x, y
+
+        # If no free position is found after many attempts, return (0, 0) as a fallback
+        print("Failed to find an open start position after multiple attempts.")
+        return 0, 0
 
     def generate_obstacles(self):
         attempt_limit = 1000  # Limit the number of attempts to place an obstacle
@@ -44,7 +62,7 @@ class Environment:
             pygame.draw.rect(screen, RED, obstacle)
 
     def is_position_free(self, pos, size):
-        # Check if a given position is free from obstacles
+        """Check if a given position is free from obstacles."""
         new_rect = pygame.Rect(pos[0], pos[1], size[0], size[1])
         for obstacle in self.obstacles:
             if new_rect.colliderect(obstacle):

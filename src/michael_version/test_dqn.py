@@ -3,25 +3,26 @@ import pygame
 from car_environment import CarEnvironment
 from car import Car
 from dqn_agent import DQNAgent
-from environment import Environment  # Assuming Environment is defined in a separate file
+from maze_environment import MazeEnvironment  # Ensure this import is correct
 
 def test_dqn():
     # Initialize Pygame
     pygame.init()
     screen_width, screen_height = 1200, 800
 
-    # Initialize the environment and the car
-    environment = Environment(screen_width, screen_height, obstacle_count=10)
-    car = Car(100, 100, environment)
-    env = CarEnvironment(car, environment)  # Pass the environment to CarEnvironment
+    # Initialize the maze environment and the car
+    environment = MazeEnvironment(screen_width, screen_height, cell_size=120)  # Adjust cell_size if needed
+    car = Car(environment.start_x, environment.start_y, environment, visualize=True)  # Enable visualization
+    env = CarEnvironment(car, environment)
 
     state_size = len(env.get_state())
     action_size = 7  # Number of actions
     agent = DQNAgent(state_size, action_size)
 
     # Load the trained model
-    agent.model.load_state_dict(torch.load("generated_models/dqn_model.pth"))
-    print("Model loaded successfully.")
+    agent.model.load_state_dict(torch.load("generated_models/dqn_model_maze_ep701.pth", map_location=torch.device('cpu')))
+    agent.epsilon = 0  # Disable exploration during testing
+    print("Maze model loaded successfully.")
 
     state = env.reset()
     total_reward = 0
@@ -43,7 +44,7 @@ def test_dqn():
         # Accumulate reward
         total_reward += reward
 
-        # Render the environment
+        # Render the environment (if visualize is enabled)
         env.render()
 
         # Update the state
@@ -54,10 +55,9 @@ def test_dqn():
             break
 
         # Add a delay to slow down the visualization
-        pygame.time.wait(2)  # Wait 10 milliseconds between each step
+        pygame.time.wait(2)  # Adjust delay as needed for visualization
 
     print(f"Test completed at timestep {time} with total reward {total_reward}.")
-    print(f"Final reward after 2000 timesteps: {total_reward}")
 
     # Quit Pygame properly
     pygame.quit()

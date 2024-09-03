@@ -24,7 +24,7 @@ class Car:
         # Draw the car on the screen as a rectangle
         pygame.draw.rect(screen, self.color, self.rect)
 
-    def update(self, map):
+    def update(self):
         # Update the car's position
         self.x += math.cos(math.radians(self.angle)) * self.speed
         self.y += math.sin(math.radians(self.angle)) * self.speed
@@ -35,13 +35,13 @@ class Car:
 
         # Check radar distances at various angles
         for d in range(-90, 150, 30):
-            self.check_radar(d, map)
+            self.check_radar(d)
 
         # Check collision with obstacles or out of bounds
-        if self.detect_collision(map):
+        if self.detect_collision(self.environment):
             self.is_alive = False
 
-    def check_radar(self, degree, map):
+    def check_radar(self, degree):
         radar_length = 0
         x = int(self.rect.centerx)
         y = int(self.rect.centery)
@@ -54,11 +54,11 @@ class Car:
             y = int(self.rect.centery + math.sin(angle_rad) * radar_length)
 
             # Break if radar is out of bounds
-            if x < 0 or y < 0 or x >= map.get_width() or y >= map.get_height():
+            if x < 0 or y < 0 or x >= self.environment.screen_width or y >= self.environment.screen_height:
                 break
 
             # Check for obstacles
-            color = map.get_at((x, y))
+            color = self.environment.get_at((x, y))
             if color == (255, 255, 255):  # Assuming white is an obstacle
                 break
 

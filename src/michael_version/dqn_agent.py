@@ -9,9 +9,9 @@ class DQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQN, self).__init__()
         # Dynamically set the size of the first layer based on the input state size
-        self.fc1 = nn.Linear(state_size, 24)
-        self.fc2 = nn.Linear(24, 24)
-        self.fc3 = nn.Linear(24, action_size)
+        self.fc1 = nn.Linear(state_size, 64)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc3 = nn.Linear(64, action_size)
 
     def forward(self, x):
         # print(f"Input to DQN: {x.shape}")  # For debugging, print the shape of the input
@@ -27,7 +27,7 @@ class DQNAgent:
         self.gamma = 0.95    # discount rate
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.001
-        self.epsilon_decay = 0.999995
+        self.epsilon_decay = 0.999998  # the exploration rate is multiplied each episode by this, so closer to 1 is better for exploration
         self.learning_rate = 0.001
         self.batch_size = 32
         self.train_start = 1000

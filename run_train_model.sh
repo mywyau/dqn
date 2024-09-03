@@ -10,8 +10,12 @@ BASE_DIR=$(dirname "$0")
 # Navigate to the directory containing the script
 cd "$BASE_DIR/src/michael_version/"
 
-# Run the simulation
-python3 train_dqn.py
+
+#python3 train_dqn.py default
+
+#python3 train_dqn.py maze
+
+python3 train_dqn.py maze visualize
 
 # Optionally, deactivate the virtual environment after running the script
 # deactivate
