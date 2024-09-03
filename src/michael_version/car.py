@@ -1,12 +1,9 @@
 import math
-
 import pygame
-
 from colours import BLACK, GREEN
 
-
 class Car:
-    def __init__(self, x, y, environment):
+    def __init__(self, x, y, environment, visualize=False):
         self.x = x
         self.y = y
         self.angle = 0
@@ -16,6 +13,7 @@ class Car:
         self.visited_positions = set()
         self.path = []
         self.radars = []
+        self.visualize = visualize  # Track whether visualization is enabled
         self.map = {}  # Map to store the explored maze (use a dict for sparse representation)
 
         # Car dimensions
@@ -27,6 +25,9 @@ class Car:
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
     def draw(self, screen):
+        if not self.visualize:
+            return  # Skip drawing if visualization is not enabled
+
         # Draw the path taken by the car
         for i in range(1, len(self.path)):
             pygame.draw.line(screen, BLACK, self.path[i - 1], self.path[i], 2)  # Draw lines connecting the path points
@@ -90,6 +91,9 @@ class Car:
         self.radars.append([(x, y), dist])
 
     def draw_radar(self, screen):
+        if not self.visualize:
+            return  # Skip radar drawing if visualization is not enabled
+
         # Draw radar lines on the screen
         for radar in self.radars:
             position, distance = radar
