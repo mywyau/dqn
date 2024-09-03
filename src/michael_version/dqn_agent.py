@@ -8,13 +8,11 @@ from collections import deque
 class DQN(nn.Module):
     def __init__(self, state_size, action_size):
         super(DQN, self).__init__()
-        # Dynamically set the size of the first layer based on the input state size
         self.fc1 = nn.Linear(state_size, 64)
         self.fc2 = nn.Linear(64, 64)
         self.fc3 = nn.Linear(64, action_size)
 
     def forward(self, x):
-        # print(f"Input to DQN: {x.shape}")  # For debugging, print the shape of the input
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         return self.fc3(x)
@@ -24,24 +22,22 @@ class DQNAgent:
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
-        self.gamma = 0.95    # discount rate
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.001
-        self.epsilon_decay = 0.999998  # the exploration rate is multiplied each episode by this, so closer to 1 is better for exploration
+        self.gamma = 0.99
+        self.epsilon = 1.0
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.9998
         self.learning_rate = 0.001
-        self.batch_size = 32
+        self.batch_size = 64
         self.train_start = 1000
 
-        # Use GPU if available, otherwise fallback to CPU
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Create the model and move it to the correct device
         self.model = DQN(state_size, action_size).to(self.device)
         self.target_model = DQN(state_size, action_size).to(self.device)
         self.update_target_model()
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()  # Huber Loss
 
     def update_target_model(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -66,13 +62,14 @@ class DQNAgent:
             state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             next_state = torch.FloatTensor(next_state).unsqueeze(0).to(self.device)
 
-            # Use the target model to calculate the target
             target = self.model(state).detach()
             if done:
                 target[0][action] = reward
             else:
+                # Double DQN: Select action using the main network, then evaluate with target network
+                next_action = torch.argmax(self.model(next_state)[0]).item()  # Action selection with the main network
                 t = self.target_model(next_state).detach()
-                target[0][action] = reward + self.gamma * torch.max(t[0])
+                target[0][action] = reward + self.gamma * t[0][next_action]  # Use target network for evaluation
 
             output = self.model(state)
             loss = self.criterion(output, target)
@@ -82,3 +79,9 @@ class DQNAgent:
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def load(self, name):
+        self.model.load_state_dict(torch.load(name))
+
+    def save(self, name):
+        torch.save(self.model.state_dict(), name)

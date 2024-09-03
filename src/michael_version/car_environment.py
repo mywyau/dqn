@@ -2,7 +2,6 @@ import pygame
 
 from colours import WHITE
 
-
 class CarEnvironment:
     def __init__(self, car, environment, visualize=True):
         self.car = car
@@ -12,7 +11,8 @@ class CarEnvironment:
             self.screen = pygame.display.set_mode((environment.screen_width, environment.screen_height))
 
     def reset(self):
-        self.car.reset()
+        self.environment.reset()  # Reset the environment (i.e., regenerate the maze)
+        self.car.reset()  # Reset the car
         if self.visualize:
             self.render()  # Only render if visualize is True
         return self.get_state()
@@ -37,11 +37,3 @@ class CarEnvironment:
     def get_state(self):
         """Get the current state from the car."""
         return self.car.get_state()
-
-    # def render(self):
-    #     """Render the environment."""
-    #     self.screen.fill(WHITE)  # Clear the screen with white
-    #     self.environment.draw(self.screen)  # Draw the current environment
-    #     self.car.draw(self.screen)  # Draw the car
-    #     pygame.display.flip()  # Update the display
-    #     self.clock.tick(60)  # Cap the frame rate to 60 FPS
