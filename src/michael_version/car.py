@@ -14,7 +14,9 @@ class Car:
         self.environment = environment  # Environment in which the car operates
         self.is_alive = True
         self.visited_positions = set()
+        self.path = []
         self.radars = []
+        self.map = {}  # Map to store the explored maze (use a dict for sparse representation)
 
         # Car dimensions
         self.width = 10
@@ -25,8 +27,13 @@ class Car:
         self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
 
     def draw(self, screen):
+        # Draw the path taken by the car
+        for i in range(1, len(self.path)):
+            pygame.draw.line(screen, BLACK, self.path[i - 1], self.path[i], 2)  # Draw lines connecting the path points
+
         # Draw the car on the screen as a rectangle
         pygame.draw.rect(screen, self.color, self.rect)
+
         # Draw radar lines and values
         self.draw_radar(screen)
 
@@ -36,12 +43,23 @@ class Car:
         self.y += math.sin(math.radians(self.angle)) * self.speed
         self.rect.topleft = (self.x, self.y)
 
+        # Store the position in the path and mark the current position as visited
+        self.path.append((self.x, self.y))
+        self.visited_positions.add((int(self.x), int(self.y)))
+        self.map[(int(self.x), int(self.y))] = 'visited'
+
         # Clear radar data
         self.radars.clear()
 
         # Check radar distances at various angles (360 degrees)
         for d in range(0, 360, 30):  # Adjust step to increase or decrease the number of beams
             self.check_radar(d, environment)
+
+        # Mark obstacles on the map
+        for radar in self.radars:
+            position, distance = radar
+            if environment.is_position_obstacle(position[0], position[1]):
+                self.map[(int(position[0]), int(position[1]))] = 'obstacle'
 
         # Check collision with obstacles or out of bounds
         if self.detect_collision(environment):
@@ -86,19 +104,19 @@ class Car:
     def perform_action(self, action):
         # Implement turning or movement logic based on radar or other sensors
         if action == 0:  # Small left turn
-            self.angle += 1
-        elif action == 1:  # Large left turn
             self.angle += 3
+        elif action == 1:  # Large left turn
+            self.angle += 6
         elif action == 2:  # Small right turn
-            self.angle -= 1
-        elif action == 3:  # Large right turn
             self.angle -= 3
+        elif action == 3:  # Large right turn
+            self.angle -= 6
         elif action == 4:  # Accelerate
             self.speed = min(self.speed + 0.5, 10)  # Increase speed faster, with a higher max speed
         elif action == 5:  # Decelerate
             self.speed = max(self.speed - 0.5, 2)  # Decrease speed faster, with a higher minimum speed
         elif action == 6:  # Reverse
-            self.speed = -min(self.speed, 2)
+            self.speed = -min(abs(self.speed) + 0.5, 2)  # Allow reverse with negative speed
 
         # Ensure the car stays within bounds
         if self.detect_collision(self.environment):
@@ -112,6 +130,8 @@ class Car:
         self.is_alive = True
         self.radars.clear()
         self.visited_positions.clear()
+        self.path.clear()  # Clear the path
+        self.map.clear()  # Clear the map
         self.rect.topleft = (self.x, self.y)
 
         # Initialize radars to some default values (e.g., max distance)
@@ -198,3 +218,90 @@ class Car:
             return True
 
         return False
+
+    def find_frontiers(self):
+        frontiers = []
+        for (x, y) in self.visited_positions:
+            neighbors = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            for nx, ny in neighbors:
+                if (nx, ny) not in self.visited_positions and (nx, ny) not in self.map:
+                    frontiers.append((nx, ny))
+        return frontiers
+
+    def choose_frontier(self, frontiers):
+        # Choose the closest frontier (you can also use other heuristics)
+        min_distance = float('inf')
+        target_frontier = None
+        for frontier in frontiers:
+            distance = math.hypot(frontier[0] - self.x, frontier[1] - self.y)
+            if distance < min_distance:
+                min_distance = distance
+                target_frontier = frontier
+        return target_frontier
+
+    def move_to_frontier(self, frontier):
+        # Simple movement logic to move towards the frontier
+        dx = frontier[0] - self.x
+        dy = frontier[1] - self.y
+        if abs(dx) > abs(dy):
+            if dx > 0:
+                self.angle = 0  # Move right
+            else:
+                self.angle = 180  # Move left
+        else:
+            if dy > 0:
+                self.angle = 90  # Move down
+            else:
+                self.angle = 270  # Move up
+        self.speed = min(2, math.hypot(dx, dy))  # Adjust speed to move towards the frontier
+
+    def explore(self):
+        frontiers = self.find_frontiers()
+        if frontiers:
+            target_frontier = self.choose_frontier(frontiers)
+            if target_frontier:
+                self.move_to_frontier(target_frontier)
+        else:
+            # If no frontiers found, stop or try a different strategy
+            self.speed = 0
+
+    def visualize_map(self):
+        # Determine the bounds of the explored area
+        min_x = min_y = float('inf')
+        max_x = max_y = float('-inf')
+
+        for (x, y) in self.map:
+            if self.map[(x, y)] in ['visited', 'obstacle']:
+                if x < min_x: min_x = x
+                if y < min_y: min_y = y
+                if x > max_x: max_x = x
+                if y > max_y: max_y = y
+
+        # Print only the explored area
+        for y in range(min_y, max_y + 1):
+            row = ""
+            for x in range(min_x, max_x + 1):
+                if (x, y) in self.map:
+                    if self.map[(x, y)] == 'visited':
+                        row += '.'  # Open space
+                    elif self.map[(x, y)] == 'obstacle':
+                        row += '#'  # Obstacle
+                else:
+                    row += ' '  # Unexplored space
+            if row.strip():  # Only print rows with content
+                print(row)
+
+    def visualize_map_to_string(self):
+        # Create a string representation of the map
+        map_str = ""
+        for y in range(self.environment.screen_height):
+            for x in range(self.environment.screen_width):
+                if (x, y) in self.map:
+                    if self.map[(x, y)] == 'visited':
+                        map_str += '.'  # Open space
+                    elif self.map[(x, y)] == 'obstacle':
+                        map_str += '#'  # Obstacle
+                else:
+                    map_str += ' '  # Unexplored space
+            map_str += '\n'
+        return map_str
