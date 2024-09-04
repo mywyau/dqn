@@ -1,8 +1,10 @@
 import logging
 import os
 import sys
+
 import pygame
 import torch
+
 from car import Car
 from car_environment import CarEnvironment
 from dqn_agent import DQNAgent
@@ -15,6 +17,7 @@ os.makedirs("generated_maps", exist_ok=True)
 
 # Set up logging to ensure INFO messages are shown
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+
 
 def train_dqn(episodes, environment_type='default', visualize=False):
     # Initialize Pygame if visualizing
@@ -72,7 +75,8 @@ def train_dqn(episodes, environment_type='default', visualize=False):
 
             if done:
                 agent.update_target_model()
-                logging.info(f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
+                logging.info(
+                    f"Episode {e + 1}/{episodes} ended with score: {total_reward}, Epsilon: {agent.epsilon:.2f}")
                 break
 
             agent.replay()
@@ -96,8 +100,8 @@ def train_dqn(episodes, environment_type='default', visualize=False):
                 map_file.write(map_output)
                 logging.info(f"Best map saved after episode {e + 1}")
 
-        # Save the model and map every 200 episodes, regardless of performance
-        if e % 200 == 0 or e == episodes - 1:
+        # Save the model and map every 10 episodes, regardless of performance
+        if (e + 1) % 10 == 0:
             torch.save(agent.model.state_dict(), f"generated_models/dqn_model_{environment_type}_ep{e + 1}.pth")
             logging.info(f"Model saved after episode {e + 1}")
 
@@ -112,10 +116,11 @@ def train_dqn(episodes, environment_type='default', visualize=False):
     if visualize:
         pygame.quit()
 
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         environment_type = sys.argv[1]
     else:
         environment_type = 'default'
 
-    train_dqn(2000, environment_type=environment_type, visualize=True)
+    train_dqn(3000, environment_type=environment_type, visualize=True)

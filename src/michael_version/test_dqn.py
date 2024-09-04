@@ -20,7 +20,7 @@ def test_dqn():
     agent = DQNAgent(state_size, action_size)
 
     # Load the trained model
-    agent.model.load_state_dict(torch.load("generated_models/dqn_model_maze_ep701.pth", map_location=torch.device('cpu')))
+    agent.model.load_state_dict(torch.load("generated_models/dqn_model_best_maze.pth", map_location=torch.device('cpu')))
     agent.epsilon = 0  # Disable exploration during testing
     print("Maze model loaded successfully.")
 
@@ -28,7 +28,7 @@ def test_dqn():
     total_reward = 0
 
     # Run the game loop for testing
-    for time in range(10000):
+    for time in range(10000000):
         # Handle events (including quitting)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:

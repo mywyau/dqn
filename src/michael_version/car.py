@@ -50,8 +50,8 @@ class Car:
         # Clear radar data
         self.radars.clear()
 
-        # Check radar distances at various angles (360 degrees)
-        for d in range(0, 360, 15):  # Increased resolution of radar beams
+        # Check radar distances at various angles (front and sides only)
+        for d in range(-90, 91, 15):  # Angles from -90 to 90 degrees (front and sides)
             self.check_radar(d, environment)
 
         # Mark obstacles on the map
@@ -110,11 +110,11 @@ class Car:
         elif action == 3:  # Large right turn
             self.angle -= 6
         elif action == 4:  # Accelerate
-            self.speed = min(self.speed + 0.5, 10)
+            self.speed = min(self.speed + 1.5, 11)
         elif action == 5:  # Decelerate
-            self.speed = max(self.speed - 0.5, 2)
+            self.speed = max(self.speed - 1, 3)
         elif action == 6:  # Reverse
-            self.speed = -min(abs(self.speed) + 0.5, 2)
+            self.speed = -min(abs(self.speed) + 1, 2)
 
         # Check for collisions
         if self.detect_collision(self.environment):
@@ -133,13 +133,13 @@ class Car:
         self.rect.topleft = (self.x, self.y)
 
         # Initialize radars to some default values (e.g., max distance)
-        for d in range(0, 360, 30):
+        for d in range(-90, 91, 30):  # Adjusted radar angles to match the front and sides
             self.radars.append([(self.x, self.y), 100])
 
     def get_state(self):
         state = [self.speed, self.angle]
 
-        fixed_radar_count = 24  # Increased radar count for better sensing
+        fixed_radar_count = 12  # Adjusted radar count to match the reduced number of beams
 
         while len(self.radars) < fixed_radar_count:
             self.radars.append([(self.x, self.y), 100])
@@ -147,7 +147,7 @@ class Car:
         for radar in self.radars:
             state.append(radar[1])
 
-        fixed_state_size = 26  # Speed + Angle + 24 radar distances
+        fixed_state_size = 15  # Speed + Angle + 12 radar distances
         while len(state) < fixed_state_size:
             state.append(0)
 
@@ -156,38 +156,91 @@ class Car:
     def get_reward(self):
         reward = 0
 
+        # Distance-based reward for moving away from the start
+        start_distance = math.hypot(self.x - self.environment.start_x, self.y - self.environment.start_y)
+        reward += start_distance * 0.01  # Encourage moving away from the start
+
+        # Penalize the car for getting too close to obstacles
         min_distance_to_obstacle = min(radar[1] for radar in self.radars)
         if min_distance_to_obstacle < 35:
             reward -= (35 - min_distance_to_obstacle) * 2
 
+        # Reward for moving forward with a higher reward for higher speed
         if self.speed > 0:
-            reward += 0.1
+            reward += 0.1 * self.speed  # Scale the reward by the speed
 
+        # Heavy reward for exploring new areas
         current_position = (int(self.rect.centerx), int(self.rect.centery))
-        if current_position not in self.visited_positions:
-            reward += 50  # Heavily reward for exploring a new area
-            self.visited_positions.add(current_position)
+        radar_range = max(radar[1] for radar in self.radars)  # Use the radar range as the size of the visited area
+        if not self.is_position_visited(current_position, radar_range):
+            reward += 100
+            self.mark_area_as_visited(current_position, radar_range)  # Mark the area within radar range as visited
         else:
-            reward -= 0.1  # Small penalty for revisiting an area
+            reward -= 0.5  # Increase the penalty for revisiting an area
 
+        # Incremental penalty for staying in the same area
+        if len(self.path) > 20:  # After 10 steps, check for stagnation
+            recent_positions = self.path[-20:]
+            mean_x = sum(p[0] for p in recent_positions) / 10
+            mean_y = sum(p[1] for p in recent_positions) / 10
+            variance = sum((math.hypot(p[0] - mean_x, p[1] - mean_y)) for p in recent_positions)
+            if variance < 10:  # Adjust this threshold as needed
+                reward -= 2  # Increase the penalty for lack of movement
+
+        # # Penalize large angle changes to encourage smooth turning
+        # if hasattr(self, 'prev_angle'):
+        #     angle_change_penalty = abs(self.angle - self.prev_angle) * 0.2  # Reduce the penalty factor
+        #     reward -= angle_change_penalty
+        # self.prev_angle = self.angle
+
+        # Penalty for high speed in sharp corners, scaled to speed
+        if self.is_approaching_corner():
+            reward -= self.speed * 0.1  # Reduce the penalty for high speed in corners
+
+        # Reward for maintaining a safe distance from obstacles
         if min_distance_to_obstacle > 50:
             reward += 5
 
+        # Bonus for moving towards the most open direction, scaled for stronger guidance
         left_value = sum(radar[1] for radar in self.radars[:len(self.radars) // 3])
         right_value = sum(radar[1] for radar in self.radars[-len(self.radars) // 3:])
         forward_value = sum(radar[1] for radar in self.radars[len(self.radars) // 3:-len(self.radars) // 3])
 
         if forward_value >= max(left_value, right_value):
-            reward += 2
+            reward += 3  # Increase reward for moving forward
         elif left_value > right_value:
-            reward += 1
+            reward += 1.5  # Adjusted to encourage smoother left turns
         else:
-            reward += 1
+            reward += 1.5  # Adjusted to encourage smoother right turns
 
+        # Heavy penalty if the car collides with an obstacle or goes out of bounds
         if not self.is_alive:
             reward -= 100
 
         return reward
+
+    def is_position_visited(self, position, radius):
+        """Check if the given position or its surrounding area has been visited based on radar range."""
+        x, y = position
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx ** 2 + dy ** 2 <= radius ** 2:  # Check if within the radar range
+                    if (x + dx, y + dy) in self.visited_positions:
+                        return True
+        return False
+
+    def mark_area_as_visited(self, position, radius):
+        """Mark a circular area around the position as visited based on radar range."""
+        x, y = position
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                if dx ** 2 + dy ** 2 <= radius:  # Check if within the radar range
+                    self.visited_positions.add((x + dx, y + dy))
+
+    def is_approaching_corner(self):
+        # A simple heuristic to determine if a corner is ahead
+        angle_changes = [abs(self.angle - prev_angle) for prev_angle in [self.angle - 15, self.angle + 15]]
+        return max(angle_changes) > 30  # Example threshold, tune as necessary
 
     def is_car_alive(self):
         return self.is_alive
